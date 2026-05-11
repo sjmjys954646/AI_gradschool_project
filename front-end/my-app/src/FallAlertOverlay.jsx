@@ -28,7 +28,7 @@ export default function FallAlertOverlay({ onClose }) {
       </div>
 
       <button className="sos-button">
-        119 긴급 신고
+        긴급 SOS
       </button>
     </div>
   );

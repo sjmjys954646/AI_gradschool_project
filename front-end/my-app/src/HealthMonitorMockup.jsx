@@ -5,6 +5,51 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faWifi } from '@fortawesome/free-solid-svg-icons'
 import soonjaImg from "./image/soonja.png";
 
+const mockData = {
+  profile: {
+    name: "김영희",
+    age: 78,
+    status: "정상",
+    lastActive: "2분 전 활동",
+    image: soonjaImg,
+  },
+
+  metrics: {
+    walkingSpeed: {
+      value: "0.8",
+      unit: "m/s",
+      status: "느림",
+    },
+
+    steps: {
+      value: "3,847",
+      unit: "5,000",
+      status: "",
+    },
+
+    heartRate: {
+      value: "72",
+      unit: "bpm",
+      status: "정상",
+    },
+
+    battery: {
+      value: "78",
+      unit: "%",
+      status: "충전 중",
+    },
+  },
+
+  location: {
+    realtime: true,
+    mapText: "Google Map 영역",
+  },
+
+  emergency: {
+    showFallAlert: true,
+  },
+};
+
 export default function HealthMonitorMockup() {
   const [showFallAlert, setShowFallAlert] = useState(true);
 
@@ -21,23 +66,23 @@ export default function HealthMonitorMockup() {
           {/* Profile */}
           <section className="d-flex align-items-center gap-3 pt-3">
             <img
-              src={soonjaImg}
+              src={mockData.profile.image}
               alt="profile"
               className="profile-img"
             />
 
             <div>
               <div className="d-flex align-items-end gap-2">
-                <h1 className="m-0 fw-black text-dark">김영희</h1>
-                <span className="age-text fw-bold">78세</span>
+                <h1 className="m-0 fw-black text-dark">{mockData.profile.name}</h1>
+                <span className="age-text fw-bold">{mockData.profile.age}세</span>
               </div>
 
               <span className="badge rounded-pill bg-success mt-2 px-3 py-2">
-                정상
+                {mockData.profile.status}
               </span>
 
               <p className="text-secondary small fw-semibold mt-2 mb-0">
-                2분 전 활동
+                {mockData.profile.lastActive}
               </p>
             </div>
           </section>
@@ -47,18 +92,18 @@ export default function HealthMonitorMockup() {
           <div className="col-6 d-flex">
             <MetricCard
               icon={<GaugeIcon />}
-              value="0.8"
+              value={mockData.metrics.walkingSpeed.value}
               unit="m/s"
               title="보행 속도"
-              status="느림"
+              status={mockData.metrics.walkingSpeed.status}
             />
           </div>
 
           <div className="col-6 d-flex">
             <MetricCard
               icon="👟"
-              value="3,847"
-              unit="/ 5,000"
+              value={mockData.metrics.steps.value}
+              unit={"/ " + mockData.metrics.steps.unit}
               title="걸음 수"
               status=""
             />
@@ -67,20 +112,20 @@ export default function HealthMonitorMockup() {
           <div className="col-6 d-flex">
             <MetricCard
               icon="〽"
-              value="72"
+              value={mockData.metrics.heartRate.value}
               unit="bpm"
               title="심박수"
-              status="정상"
+              status={mockData.metrics.heartRate.status}
             />
           </div>
 
           <div className="col-6 d-flex">
             <MetricCard
               icon="🔋"
-              value="78"
+              value={mockData.metrics.battery.value}
               unit="%"
               title="배터리"
-              status="충전 중"
+              status={mockData.metrics.battery.status}
             />
           </div>
         </section>
