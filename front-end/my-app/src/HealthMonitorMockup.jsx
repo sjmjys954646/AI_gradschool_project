@@ -1,57 +1,92 @@
-import { useState } from "react";
 import "./HealthMonitorMockup.css";
 import FallAlertOverlay from "./FallAlertOverlay";
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { faWifi } from '@fortawesome/free-solid-svg-icons'
-import soonjaImg from "./image/soonja.png";
+import { useEffect, useState } from "react";
 
-const mockData = {
+const initialData = {
   profile: {
-    name: "김영희",
-    age: 78,
-    status: "정상",
-    lastActive: "2분 전 활동",
-    image: soonjaImg,
+    name: "로딩 중...",
+    age: 0,
+    status: "확인 중",
+    lastActive: "데이터 불러오는 중",
+    image: "",
   },
 
   metrics: {
     walkingSpeed: {
-      value: "0.8",
+      value: "--",
       unit: "m/s",
-      status: "느림",
+      status: "확인 중",
     },
 
     steps: {
-      value: "3,847",
-      unit: "5,000",
+      value: "--",
+      unit: "----",
       status: "",
     },
 
     heartRate: {
-      value: "72",
+      value: "--",
       unit: "bpm",
-      status: "정상",
+      status: "확인 중",
     },
 
     battery: {
-      value: "78",
+      value: "--",
       unit: "%",
-      status: "충전 중",
+      status: "확인 중",
     },
   },
 
   location: {
     realtime: true,
-    mapText: "Google Map 영역",
+    mapText: "위치 불러오는 중",
   },
 
   emergency: {
-    showFallAlert: true,
+    showFallAlert: false,
   },
 };
+const API_BASE = "http://127.0.0.1:8000";
 
 export default function HealthMonitorMockup() {
-  const [showFallAlert, setShowFallAlert] = useState(true);
+  const [data, setData] = useState(initialData);
+  const [showFallAlert, setShowFallAlert] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "a" || e.key === "A") {
+        setShowFallAlert(true);
+      }
+
+      if (e.key === "s" || e.key === "S") {
+        setShowFallAlert(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
+  useEffect(() => {
+    fetch("http://127.0.0.1:8000/status?user_id=1")
+      .then((res) => res.json())
+      .then((result) => {
+        console.log(result);
+        setData(result);
+
+        setShowFallAlert(
+          result.emergency?.showFallAlert || false
+        );
+      })
+      .catch((err) => {
+        console.error("API Error:", err);
+      });
+  }, []);
 
   return (
     <div className="app-bg d-flex align-items-center justify-content-center p-4">
@@ -66,23 +101,23 @@ export default function HealthMonitorMockup() {
           {/* Profile */}
           <section className="d-flex align-items-center gap-3 pt-3">
             <img
-              src={mockData.profile.image}
+               src={`${API_BASE}/${data.profile.image}`}
               alt="profile"
               className="profile-img"
             />
 
             <div>
               <div className="d-flex align-items-end gap-2">
-                <h1 className="m-0 fw-black text-dark">{mockData.profile.name}</h1>
-                <span className="age-text fw-bold">{mockData.profile.age}세</span>
+                <h1 className="m-0 fw-black text-dark">{data.profile.name}</h1>
+                <span className="age-text fw-bold">{data.profile.age}세</span>
               </div>
 
               <span className="badge rounded-pill bg-success mt-2 px-3 py-2">
-                {mockData.profile.status}
+                {data.profile.status}
               </span>
 
               <p className="text-secondary small fw-semibold mt-2 mb-0">
-                {mockData.profile.lastActive}
+                {data.profile.lastActive}
               </p>
             </div>
           </section>
@@ -92,18 +127,18 @@ export default function HealthMonitorMockup() {
           <div className="col-6 d-flex">
             <MetricCard
               icon={<GaugeIcon />}
-              value={mockData.metrics.walkingSpeed.value}
+              value={data.metrics.walkingSpeed.value}
               unit="m/s"
               title="보행 속도"
-              status={mockData.metrics.walkingSpeed.status}
+              status={data.metrics.walkingSpeed.status}
             />
           </div>
 
           <div className="col-6 d-flex">
             <MetricCard
               icon="👟"
-              value={mockData.metrics.steps.value}
-              unit={"/ " + mockData.metrics.steps.unit}
+              value={data.metrics.steps.value}
+              unit={"/ " + data.metrics.steps.unit}
               title="걸음 수"
               status=""
             />
@@ -112,20 +147,20 @@ export default function HealthMonitorMockup() {
           <div className="col-6 d-flex">
             <MetricCard
               icon="〽"
-              value={mockData.metrics.heartRate.value}
+              value={data.metrics.heartRate.value}
               unit="bpm"
               title="심박수"
-              status={mockData.metrics.heartRate.status}
+              status={data.metrics.heartRate.status}
             />
           </div>
 
           <div className="col-6 d-flex">
             <MetricCard
               icon="🔋"
-              value={mockData.metrics.battery.value}
+              value={data.metrics.battery.value}
               unit="%"
               title="배터리"
-              status={mockData.metrics.battery.status}
+              status={data.metrics.battery.status}
             />
           </div>
         </section>

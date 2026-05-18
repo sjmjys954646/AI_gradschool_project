@@ -1,96 +1,160 @@
 from fastapi import FastAPI
-from pydantic import BaseModel
-from typing import Optional
 from datetime import datetime
+from fastapi.middleware.cors import CORSMiddleware
+from database import get_db, init_db
+from fastapi.staticfiles import StaticFiles
+
 
 app = FastAPI()
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+)
 
-# 센서 데이터 요청 형식
-class SensorData(BaseModel):
-    user_id: int
+app.mount("/images", StaticFiles(directory="images"), name="images")
 
-    accel_x: float
-    accel_y: float
-    accel_z: float
-
-    gyro_x: float
-    gyro_y: float
-    gyro_z: float
-
-    pressure: float
-
-    measured_at: Optional[datetime] = None
+@app.on_event("startup")
+def startup():
+    init_db()
 
 
-# 현재 상태 응답 형식
-class CurrentStatus(BaseModel):
-    user_id: int
-    name: str
-    age: int
+@app.get("/status")
+def get_status(user_id: int):
+    conn = get_db()
+    cur = conn.cursor()
 
-    walking_speed: float
-    walking_speed_status: str
+    cur.execute("""
+    SELECT 
+        u.id AS user_id,
+        u.name,
+        u.age,
+        u.profile_image,
+        u.status,
 
-    steps: int
-    step_goal: int
+        cs.walking_speed,
+        cs.walking_speed_status,
+        cs.steps,
+        cs.steps_goal,
+        cs.heart_rate,
+        cs.battery,
+        cs.last_active_at,
 
-    heart_rate: int
-    heart_rate_status: str
+        l.address
+    FROM user u
+    LEFT JOIN current_status cs ON u.id = cs.user_id
+    LEFT JOIN location l ON u.id = l.user_id
+    WHERE u.id = ?
+    """, (user_id,))
 
-    battery: int
-    battery_status: str
+    row = cur.fetchone()
 
-    fall_detected: bool
-    last_active: str
+    cur.execute("""
+    SELECT *
+    FROM alarm
+    WHERE user_id = ?
+      AND status = 'PENDING'
+    ORDER BY detected_at DESC
+    LIMIT 1
+    """, (user_id,))
 
+    alarm = cur.fetchone()
+    conn.close()
 
-@app.post("/save")
-def save_current_information(data: SensorData):
-    """
-    센서 데이터를 DB에 저장
-    """
+    if row is None:
+        return {"message": "user not found"}
+
     return {
-        "message": "Sensor data saved",
-        "data": data
+        "profile": {
+            "name": row["name"],
+            "age": row["age"],
+            "status": row["status"],
+            "lastActive": row["last_active_at"],
+            "image": row["profile_image"],
+        },
+        "metrics": {
+            "walkingSpeed": {
+                "value": row["walking_speed"],
+                "unit": "m/s",
+                "status": row["walking_speed_status"],
+            },
+            "steps": {
+                "value": row["steps"],
+                "unit": row["steps_goal"],
+                "status": "",
+            },
+            "heartRate": {
+                "value": row["heart_rate"],
+                "unit": "bpm",
+                "status": "정상",
+            },
+            "battery": {
+                "value": row["battery"],
+                "unit": "%",
+                "status": "충전 중",
+            },
+        },
+        "location": {
+            "realtime": True,
+            "mapText": row["address"] or "Google Map 영역",
+        },
+        "emergency": {
+            "showFallAlert": alarm is not None,
+        },
     }
 
 
 @app.get("/fall")
 def detect_fall(user_id: int):
-    """
-    저장된 센서 데이터를 기반으로 낙상 감지 모델 실행
-    """
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("""
+    SELECT *
+    FROM sensor_reading
+    WHERE user_id = ?
+    ORDER BY created_at DESC
+    LIMIT 100
+    """, (user_id,))
+
+    readings = cur.fetchall()
+
+    # TODO: 여기에 slicing + model inference 연결
+    fall_detected = False
+    confidence = 0.12
+
+    if fall_detected and readings:
+        slice_start_time = readings[-1]["created_at"]
+        slice_end_time = readings[0]["created_at"]
+
+        cur.execute("""
+        INSERT INTO alarm (
+            user_id,
+            type,
+            message,
+            status,
+            slice_start_time,
+            slice_end_time,
+            detected_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            user_id,
+            "FALL",
+            "낙상 감지",
+            "PENDING",
+            slice_start_time,
+            slice_end_time,
+            datetime.now()
+        ))
+
+        conn.commit()
+
+    conn.close()
+
     return {
         "user_id": user_id,
-        "fall_detected": False,
-        "confidence": 0.12,
-        "message": "No fall detected"
-    }
-
-
-@app.get("/status")
-def get_current_status(user_id: int):
-    """
-    현재 사용자 상태 및 프론트 표시 정보 반환
-    """
-    return {
-        "user_id": user_id,
-        "name": "김영희",
-        "age": 78,
-
-        "walking_speed": 0.8,
-        "walking_speed_status": "느림",
-
-        "steps": 3847,
-        "step_goal": 5000,
-
-        "heart_rate": 72,
-        "heart_rate_status": "정상",
-
-        "battery": 78,
-        "battery_status": "충전 중",
-
-        "fall_detected": False,
-        "last_active": "2분 전 활동"
+        "fall_detected": fall_detected,
+        "confidence": confidence,
+        "message": "Fall detected" if fall_detected else "No fall detected",
     }
