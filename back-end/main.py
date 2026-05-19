@@ -3,7 +3,37 @@ from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
 from database import get_db, init_db
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+from typing import List, Optional
+import torch
 
+import sys
+sys.path.append(r"C:\Users\ECL1\PycharmProjects\Capstone")
+
+from main2_sisfallandmobifall import DSCS
+
+model = None
+
+WINDOW_SECONDS = 8
+TARGET_FS = 50
+WINDOW_SIZE = WINDOW_SECONDS * TARGET_FS  # 400
+
+class SensorReadingItem(BaseModel):
+    accel_x: float
+    accel_y: float
+    accel_z: float
+
+    gyro_x: float
+    gyro_y: float
+    gyro_z: float
+
+    pressure: float
+    measured_at: Optional[datetime] = None
+
+
+class SensorBatch(BaseModel):
+    user_id: int
+    readings: List[SensorReadingItem]
 
 app = FastAPI()
 
@@ -16,7 +46,22 @@ app.mount("/images", StaticFiles(directory="images"), name="images")
 
 @app.on_event("startup")
 def startup():
+    global model
+
     init_db()
+
+    model = DSCS()
+
+    model.load_state_dict(
+        torch.load(
+            r"C:\Users\ECL1\PycharmProjects\Capstone\combined_eval_outputs\combined-holdout-80-20_best_model.pth",
+            map_location="cpu"
+        )
+    )
+
+    model.eval()
+
+    print("Model loaded")
 
 
 @app.get("/status")
@@ -110,23 +155,118 @@ def detect_fall(user_id: int):
     cur = conn.cursor()
 
     cur.execute("""
+        SELECT *
+        FROM sensor_reading
+        WHERE user_id = ?
+        ORDER BY measured_at DESC
+        LIMIT ?
+        """, (user_id, WINDOW_SIZE))
+
+    readings = list(reversed(cur.fetchall()))
+
+    acc, gyro = build_model_input(readings)
+
+    if acc is None or gyro is None:
+        conn.close()
+
+        return {
+            "message": "not enough sensor data",
+            "required_window": WINDOW_SIZE,
+            "current_count": len(readings)
+        }
+
+    with torch.no_grad():
+        logits = model(acc, gyro)
+
+        probs = torch.softmax(logits, dim=1)
+
+        confidence = float(probs[0][1])
+
+        pred = int(torch.argmax(probs, dim=1).item())
+
+        fall_detected = pred == 1
+
+    conn.close()
+
+    return {
+        "user_id": user_id,
+
+        "fall_detected": fall_detected,
+
+        "confidence": confidence,
+
+        "window_size": WINDOW_SIZE,
+
+        "sensor_count": len(readings),
+
+        "message": (
+            "Fall detected"
+            if fall_detected
+            else "No fall detected"
+        )
+    }
+
+@app.post("/save")
+def save_sensor_batch(data: SensorBatch):
+    conn = get_db()
+    cur = conn.cursor()
+
+    rows = []
+
+    for r in data.readings:
+        rows.append((
+            data.user_id,
+            r.accel_x,
+            r.accel_y,
+            r.accel_z,
+            r.gyro_x,
+            r.gyro_y,
+            r.gyro_z,
+            r.pressure,
+            r.measured_at or datetime.now(),
+            datetime.now()
+        ))
+
+    cur.executemany("""
+    INSERT INTO sensor_reading (
+        user_id,
+        accel_x, accel_y, accel_z,
+        gyro_x, gyro_y, gyro_z,
+        pressure,
+        measured_at,
+        created_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, rows)
+
+    conn.commit()
+
+    cur.execute("""
     SELECT *
     FROM sensor_reading
     WHERE user_id = ?
-    ORDER BY created_at DESC
-    LIMIT 100
-    """, (user_id,))
+    ORDER BY measured_at DESC
+    LIMIT ?
+    """, (data.user_id, WINDOW_SIZE))
 
-    readings = cur.fetchall()
+    readings = list(reversed(cur.fetchall()))
 
-    # TODO: 여기에 slicing + model inference 연결
+    acc, gyro = build_model_input(readings)
+
     fall_detected = False
-    confidence = 0.12
+    confidence = 0.0
 
-    if fall_detected and readings:
-        slice_start_time = readings[-1]["created_at"]
-        slice_end_time = readings[0]["created_at"]
+    if acc is not None and gyro is not None:
+        with torch.no_grad():
+            logits = model(acc, gyro)
+            probs = torch.softmax(logits, dim=1)
 
+            confidence = float(probs[0][1])
+            pred = int(torch.argmax(probs, dim=1).item())
+
+            fall_detected = pred == 1
+
+    if fall_detected:
         cur.execute("""
         INSERT INTO alarm (
             user_id,
@@ -139,12 +279,12 @@ def detect_fall(user_id: int):
         )
         VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (
-            user_id,
+            data.user_id,
             "FALL",
             "낙상 감지",
             "PENDING",
-            slice_start_time,
-            slice_end_time,
+            readings[-WINDOW_SIZE]["measured_at"],
+            readings[-1]["measured_at"],
             datetime.now()
         ))
 
@@ -153,8 +293,42 @@ def detect_fall(user_id: int):
     conn.close()
 
     return {
-        "user_id": user_id,
+        "message": "sensor batch saved",
+        "count": len(data.readings),
         "fall_detected": fall_detected,
-        "confidence": confidence,
-        "message": "Fall detected" if fall_detected else "No fall detected",
+        "confidence": confidence
     }
+
+def build_model_input(readings):
+    """
+    readings: DB에서 가져온 최근 센서 데이터
+    return:
+      acc_tensor:  (1, 400, 3)
+      gyro_tensor: (1, 400, 3)
+    """
+
+    if len(readings) < WINDOW_SIZE:
+        return None, None
+
+    recent = readings[-WINDOW_SIZE:]
+
+    acc = []
+    gyro = []
+
+    for r in recent:
+        acc.append([
+            r["accel_x"],
+            r["accel_y"],
+            r["accel_z"],
+        ])
+
+        gyro.append([
+            r["gyro_x"],
+            r["gyro_y"],
+            r["gyro_z"],
+        ])
+
+    acc = torch.tensor([acc], dtype=torch.float32)
+    gyro = torch.tensor([gyro], dtype=torch.float32)
+
+    return acc, gyro
