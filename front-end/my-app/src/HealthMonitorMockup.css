@@ -1,0 +1,151 @@
+.app-bg {
+  min-height: 100vh;
+  background: #f1f5f9;
+}
+
+.phone-frame {
+  width: 390px;
+  height: 780px;
+  background: white;
+  border-radius: 42px;
+  border: 8px solid #111827;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.2);
+}
+
+.status-bar {
+  height: 40px;
+}
+
+.app-body {
+  background: linear-gradient(to bottom, #e0f2fe, white);
+  height: 100%;
+}
+
+.profile-img {
+  width: 80px;
+  height: 80px;
+  border-radius: 999px;
+  object-fit: cover;
+}
+
+.metric-card {
+  background: white;
+  border-radius: 24px;
+  border: 1px solid #e5e7eb;
+  min-height: 145px;
+}
+
+.metric-value {
+  font-size: 28px;
+}
+
+.map-card {
+  height: 20px;
+  background: #f0f9ff;
+  border-radius: 28px;
+}
+
+.sos-btn {
+  background: #ef4444;
+  border: none;
+}
+
+.age-text{
+    font-size: 28px;
+    color: blue;
+}
+
+.metric-value-row {
+  min-height: 54px;
+  display: flex;
+  align-items: flex-end;
+}
+
+.sos-button {
+  display: block;
+
+  width: 100%;
+  margin: 16px auto 0;
+
+  padding: 14px 0;
+  border: none;
+  border-radius: 999px;
+
+  background: linear-gradient(
+    180deg,
+    #ff6b6b 0%,
+    #ff4d4f 100%
+  );
+
+  color: white;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.3px;
+
+  box-shadow:
+    0 8px 18px rgba(255, 77, 79, 0.35),
+    inset 0 2px 0 rgba(255,255,255,0.25);
+
+  transition: 0.15s ease;
+}
+
+.sos-button:active {
+  transform: scale(0.98);
+}
+
+.sos-button:hover {
+  filter: brightness(1.03);
+}
+
+.map-placeholder {
+  width: 100%;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 24px;
+  padding: 12px;
+}
+
+.map-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.map-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.map-status {
+  font-size: 12px;
+  font-weight: 700;
+  color: #0ea5e9;
+  background: #e0f2fe;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+
+.map-area {
+  height: 110px;
+  border-radius: 18px;
+  background: #eef7ff;
+  border: 1px dashed #93c5fd;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.map-pin {
+  font-size: 26px;
+}
+
+.map-text {
+  margin: 6px 0 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
+}
